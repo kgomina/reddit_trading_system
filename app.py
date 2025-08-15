@@ -6,13 +6,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import yfinance as yf
 from datetime import datetime, timedelta
-import joblib
-import pickle
-import requests
-import json
 import time
-from io import BytesIO
-import base64
 
 # Configuration de la page
 st.set_page_config(
@@ -70,12 +64,32 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def initialize_session_state():
+    """Initialise les variables de session"""
+    if 'portfolio' not in st.session_state:
+        st.session_state.portfolio = {
+            'cash': 10000.0,
+            'positions': {
+                'AAPL': {'quantity': 10, 'avg_price': 150.0},
+                'MSFT': {'quantity': 5, 'avg_price': 280.0},
+                'GOOGL': {'quantity': 2, 'avg_price': 2500.0}
+            },
+            'history': []
+        }
+    
+    if 'predictions_history' not in st.session_state:
+        st.session_state.predictions_history = []
+    
+    if 'alerts' not in st.session_state:
+        st.session_state.alerts = []
+
 class TradingSystemCloud:
     """Système de trading adapté pour Streamlit Cloud"""
     
     def __init__(self):
-        self.initialize_session_state()
+        pass
         
+    @staticmethod
     @st.cache_data
     def load_sample_models():
         """Charge des modèles d'exemple (simulation)"""
@@ -88,27 +102,9 @@ class TradingSystemCloud:
         }
         return models
     
-    def initialize_session_state(self):
-        """Initialise les variables de session"""
-        if 'portfolio' not in st.session_state:
-            st.session_state.portfolio = {
-                'cash': 10000.0,
-                'positions': {
-                    'AAPL': {'quantity': 10, 'avg_price': 150.0},
-                    'MSFT': {'quantity': 5, 'avg_price': 280.0},
-                    'GOOGL': {'quantity': 2, 'avg_price': 2500.0}
-                },
-                'history': []
-            }
-        
-        if 'predictions_history' not in st.session_state:
-            st.session_state.predictions_history = []
-        
-        if 'alerts' not in st.session_state:
-            st.session_state.alerts = []
-    
+    @staticmethod
     @st.cache_data(ttl=300)  # Cache pendant 5 minutes
-    def get_stock_data(_self, ticker, period="1mo"):
+    def get_stock_data(ticker, period="1mo"):
         """Récupère les données boursières avec cache"""
         try:
             stock = yf.Ticker(ticker)
@@ -191,15 +187,14 @@ class TradingSystemCloud:
         if len(st.session_state.alerts) > 50:
             st.session_state.alerts = st.session_state.alerts[-50:]
 
-# Initialiser le système
-@st.cache_resource
-def get_trading_system():
-    return TradingSystemCloud()
-
-system = get_trading_system()
-
 # Interface utilisateur principale
 def main():
+    # Initialiser l'état de session en premier
+    initialize_session_state()
+    
+    # Initialiser le système
+    system = TradingSystemCloud()
+    
     # Header
     st.markdown('<h1 class="main-header">🚀 Reddit Trading Dashboard</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Système de trading algorithmique basé sur l\'analyse de sentiment Reddit</p>', unsafe_allow_html=True)
@@ -230,6 +225,9 @@ def main():
         stock_data = system.get_stock_data(ticker, "1d")
         if not stock_data.empty:
             current_prices[ticker] = stock_data['Close'].iloc[-1]
+        else:
+            # Utiliser le prix moyen si les données ne sont pas disponibles
+            current_prices[ticker] = st.session_state.portfolio['positions'][ticker]['avg_price']
     
     portfolio_value = system.calculate_portfolio_value(current_prices)
     daily_change = np.random.uniform(-500, 800)  # Simulation
@@ -490,7 +488,7 @@ def main():
     
     # Auto-refresh
     if auto_refresh:
-        time.sleep(30)
+        time.sleep(1)  # Réduire de 30s à 1s pour éviter les blocages
         st.rerun()
 
 # Section d'aide et informations
